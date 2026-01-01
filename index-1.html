@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Venčení se psy – offline mapa</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body { height: 100%; margin: 0; font-family: system-ui, Arial; }
+    header { padding: 12px; background: #fff; position: sticky; top: 0; z-index: 1000; border-bottom: 1px solid #eee; }
+    h1 { margin: 0 0 6px; font-size: 20px; }
+    .subtitle { color: #666; margin: 0 0 10px; }
+    .controls { display: flex; gap: 8px; }
+    #search { flex: 1; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; }
+    #reset { padding: 8px 12px; }
+    #map { height: calc(100% - 120px); }
+    footer { position: fixed; bottom: 8px; left: 8px; background: rgba(255,255,255,0.85); padding: 4px 8px; border-radius: 6px; font-size: 12px; }
+    #lightbox.hidden { display: none; }
+    #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; }
+    #lightbox img { max-width: 90vw; max-height: 80vh; border-radius: 8px; }
+    #lightbox-close { position: absolute; top: 20px; right: 30px; font-size: 40px; color: #fff; cursor: pointer; }
+    #lightbox-caption { color: #ddd; }
+    #lightbox-nav { display: flex; gap: 10px; }
+    #lightbox-nav button { padding: 8px 12px; }
+    .leaflet-popup-content img { max-width: 100%; border-radius: 6px; cursor: zoom-in; }
+    .tag { display: inline-block; padding: 2px 8px; background: #eef5ff; border: 1px solid #cfe0ff; color: #2859c5; border-radius: 999px; font-size: 12px; margin-right: 6px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Venčení se psy – offline mapa</h1>
+    <p class="subtitle">Klikni na bod → zobrazí se popis a fotky. Funguje bez serveru.</p>
+    <div class="controls">
+      <input id="search" placeholder="Hledat místo nebo tag (#louka, #voda, #sraz)…" />
+      <button id="reset">Reset</button>
+    </div>
+  </header>
+  <div id="map"></div>
+  <div id="lightbox" class="hidden" aria-hidden="true">
+    <span id="lightbox-close">×</span>
+    <img id="lightbox-img" alt="foto místa" />
+    <div id="lightbox-caption"></div>
+    <div id="lightbox-nav">
+      <button id="prev">◀</button>
+      <button id="next">▶</button>
+    </div>
+  </div>
+  <footer><small>Mapa: © OpenStreetMap | Leaflet</small></footer>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const EMBED_PHOTO_BLUE1 = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="100%" height="100%" fill="#3478b7"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="48" fill="#fff">Louka u Berounky – 1</text></svg>`);
+    const EMBED_PHOTO_BLUE2 = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="100%" height="100%" fill="#215a8f"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="48" fill="#fff">Louka u Berounky – 2</text></svg>`);
+    const EMBED_PHOTO_GREEN1 = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="100%" height="100%" fill="#5aa13d"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="48" fill="#fff">Panská zahrada – 1</text></svg>`);
+    const EMBED_PHOTO_GREEN2 = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="100%" height="100%" fill="#4c8e34"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="48" fill="#fff">Panská zahrada – 2</text></svg>`);
+    const EMBED_PHOTO_BROWN1 = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="100%" height="100%" fill="#8c6c44"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="48" fill="#fff">Lesní cesta Na Palouček – 1</text></svg>`);
+    const EMBED_PHOTO_BROWN2 = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="100%" height="100%" fill="#6e5434"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="48" fill="#fff">Lesní cesta Na Palouček – 2</text></svg>`);
+
+    const PLACES = [
+      {id:"place-berounka",name:"Louka u Berounky – sraz",lat:49.9628,lng:14.0752,tags:["sraz","louka","voda"],description:"Prostorná louka u řeky, ideální pro společné venčení.",photos:[EMBED_PHOTO_BLUE1,EMBED_PHOTO_BLUE2],nextEvent:{time:"2026-01-05T16:30:00+01:00",title:"Podvečerní venčení",notes:"Vemte čelovky :)"}},
+      {id:"place-panska",name:"Panská zahrada – Beroun",lat:49.9657,lng:14.0746,tags:["park","rodiny","vodítko"],description:"Městský park, vhodný pro klidné procházky.",photos:[EMBED_PHOTO_GREEN1,EMBED_PHOTO_GREEN2]},
+      {id:"place-paloucek",name:"Lesní cesta Na Palouček",lat:49.9579,lng:14.0618,tags:["les","volno","stín"],description:"Stinná lesní trasa, menší palouček uprostřed.",photos:[EMBED_PHOTO_BROWN1,EMBED_PHOTO_BROWN2]}
+    ];
+
+    const map = L.map('map').setView([49.963,14.073],13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap'}).addTo(map);
+    const state={places:PLACES,markers:[],activePhotos:[]};
+    renderMarkers(state.places);fitBoundsToMarkers();
+
+    function renderMarkers(places){state.markers.forEach(m=>map.removeLayer(m));state.markers=[];places.forEach(place=>{const marker=L.marker([place.lat,place.lng]).addTo(map);const tags=(place.tags||[]).map(t=>`<span class="tag">#${t}</span>`).join(' ');const cover=(place.photos&&place.photos[0])?`<img src="${place.photos[0]}" alt="${place.name}" data-place="${place.id}" class="popup-cover" />`:'';const eventHtml=place.nextEvent?`<div><strong>Další sraz:</strong> ${formatDate(place.nextEvent.time)} — ${place.nextEvent.title}<br><em>${place.nextEvent.notes||''}</em></div>`:'';const popupHtml=`<div><h3>${place.name}</h3>${tags}<p>${place.description||''}</p>${eventHtml}${cover}<div style="margin-top:8px"><button data-gallery="${place.id}">Zobrazit fotky (${place.photos?place.photos.length:0})</button></div></div>`;marker.bindPopup(popupHtml);state.markers.push(marker);});map.on('popupopen',e=>{const content=e.popup.getElement();if(!content)return;const btn=content.querySelector('button[data-gallery]');if(btn){btn.addEventListener('click',()=>{const placeId=btn.getAttribute('data-gallery');const place=state.places.find(p=>p.id===placeId);if(place&&place.photos&&place.photos.length)openLightbox(place.photos,place.name);});}const cover=content.querySelector('.popup-cover');if(cover){cover.addEventListener('click',()=>{const placeId=cover.getAttribute('data-place');const place=state.places.find(p=>p.id===placeId);if(place&&place.photos&&place.photos.length)openLightbox(place.photos,place.name);});}});}
+    function fitBoundsToMarkers(){if(!state.markers.length)return;const group=L.featureGroup(state.markers);map.fitBounds(group.getBounds().pad(0.2));}
+    const search=document.getElementById('search');const reset=document.getElementById('reset');search.addEventListener('input',e=>{const q=e.target.value.toLowerCase().trim();if(!q)return renderMarkers(state.places);const filtered=state.places.filter(p=>{const inName=(p.name||'').toLowerCase().includes(q);const inTags=(p.tags||[]).some(t=>(`#${t}`.toLowerCase().includes(q)||t.toLowerCase().includes(q));return inName||inTags;});renderMarkers(filtered);});reset.addEventListener('click',()=>{search.value='';renderMarkers(state.places);fitBoundsToMarkers();});
+    const lb=document.getElementById('lightbox');const lbImg=document.getElementById('lightbox-img');const lbCap=document.getElementById('lightbox-caption');const lbClose=document.getElementById('lightbox-close');const lbPrev=document.getElementById('prev');const lbNext=document.getElementById('next');function openLightbox(photos,caption){state.activePhotos=photos.slice();lb.classList.remove('hidden');lb.setAttribute('aria-hidden','false');lbCap.textContent=caption||'';showPhoto(0);}function showPhoto(i){const len=state.activePhotos.length;const idx=((i%len)+len)%len;lbImg.src=state.activePhotos[idx];lbImg.dataset.index=idx;}lbClose.addEventListener('click',()=>{lb.classList.add('hidden');lb.setAttribute('aria-hidden','true');});lb.addEventListener('click',e=>{if(e.target===lb){lb.classList.add('hidden');lb.setAttribute('aria-hidden','true');}});window.addEventListener('keydown',e=>{if(lb.classList.contains('hidden'))return;if(e.key==='Escape'){lb.classList.add('hidden');lb.setAttribute('aria-hidden','true');}if(e.key==='ArrowRight')showPhoto((+lbImg.dataset.index||0)+1);if(e.key==='ArrowLeft')showPhoto((+lbImg.dataset.index||0)-1);});lbPrev.addEventListener('click',()=>showPhoto((+lbImg.dataset.index||0)-1));lbNext.addEventListener('click',()=>showPhoto((+lbImg.dataset.index||0)+1));function formatDate(iso){const d=new Date(iso);return d.toLocaleString('cs-CZ',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
+  </script>
+</body>
+</html>
